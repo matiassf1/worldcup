@@ -34,9 +34,14 @@ export default function AdminControls() {
       });
       streamRef.current = stream;
 
-      const mimeType = 'video/webm; codecs=vp8';
+      // vp8+opus matches what Chrome actually produces when audio is present.
+      // Using vp8-only causes MEDIA_ERR_DECODE on the viewer's SourceBuffer.
+      let mimeType = 'video/webm; codecs="vp8,opus"';
       if (!MediaRecorder.isTypeSupported(mimeType)) {
-        setError('Tu navegador no soporta video/webm con vp8. Usá Chrome o Edge.');
+        mimeType = 'video/webm; codecs=vp8';
+      }
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        setError('Tu navegador no soporta WebM. Usá Chrome o Edge.');
         stream.getTracks().forEach((t) => t.stop());
         return;
       }
