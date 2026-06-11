@@ -63,11 +63,13 @@ app.post('/api/room/auth', (req, res) => {
   res.status(401).json({ error: 'Unauthorized' });
 });
 
-// Serve React build in production
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../client/dist')));
+// Serve React build when dist exists
+const distPath = path.join(__dirname, '../client/dist');
+const fs = require('fs');
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
   app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../client/dist/index.html'));
+    res.sendFile(path.join(distPath, 'index.html'));
   });
 }
 
