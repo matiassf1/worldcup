@@ -19,8 +19,6 @@ const state = {
   adminSocketId: null,
   initChunk: null,
   recentChunks: [],        // max 60 chunks
-  validAdminTokens: new Set(),
-  validViewerTokens: new Set(),
   viewerNicknames: new Map(),
   viewerCount: 0,
 };
@@ -33,8 +31,28 @@ function randomNickname() {
   return `${a}${n}${Math.floor(Math.random() * 99) + 1}`;
 }
 
-function generateToken() {
-  return crypto.randomBytes(32).toString('hex');
+// HMAC-signed tokens — survive server restarts as long as TOKEN_SECRET is unchanged
+const TOKEN_SECRET = process.env.TOKEN_SECRET || 'changeme';
+const TOKEN_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours
+
+function generateToken(role) {
+  const payload = Buffer.from(JSON.stringify({ role, exp: Date.now() + TOKEN_TTL_MS })).toString('base64url');
+  const sig = crypto.createHmac('sha256', TOKEN_SECRET).update(payload).digest('base64url');
+  return `${payload}.${sig}`;
+}
+
+function verifyToken(token, expectedRole) {
+  if (!token) return false;
+  const dot = token.lastIndexOf('.');
+  if (dot === -1) return false;
+  const payload = token.slice(0, dot);
+  const sig = token.slice(dot + 1);
+  const expected = crypto.createHmac('sha256', TOKEN_SECRET).update(payload).digest('base64url');
+  if (sig !== expected) return false;
+  try {
+    const data = JSON.parse(Buffer.from(payload, 'base64url').toString());
+    return data.role === expectedRole && data.exp > Date.now();
+  } catch { return false; }
 }
 
 // REST routes
@@ -46,9 +64,7 @@ app.get('/health', (req, res) => {
 app.post('/api/admin/auth', (req, res) => {
   const { password } = req.body;
   if (password === process.env.ADMIN_PASSWORD) {
-    const token = generateToken();
-    state.validAdminTokens.add(token);
-    return res.json({ token });
+    return res.json({ token: generateToken('admin') });
   }
   res.status(401).json({ error: 'Unauthorized' });
 });
@@ -56,9 +72,7 @@ app.post('/api/admin/auth', (req, res) => {
 app.post('/api/room/auth', (req, res) => {
   const { user, password } = req.body;
   if (user === process.env.ROOM_USER && password === process.env.ROOM_PASSWORD) {
-    const token = generateToken();
-    state.validViewerTokens.add(token);
-    return res.json({ token });
+    return res.json({ token: generateToken('viewer') });
   }
   res.status(401).json({ error: 'Unauthorized' });
 });
@@ -76,8 +90,7 @@ if (fs.existsSync(distPath)) {
 // Socket.io auth middleware
 io.use((socket, next) => {
   const { token, role } = socket.handshake.auth;
-  if (role === 'admin' && state.validAdminTokens.has(token)) return next();
-  if (role === 'viewer' && state.validViewerTokens.has(token)) return next();
+  if (verifyToken(token, role)) return next();
   next(new Error('unauthorized'));
 });
 
