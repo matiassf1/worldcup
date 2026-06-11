@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getSocket } from '../socket.js';
 
 const MIME_TYPE = 'video/webm; codecs=vp8';
@@ -9,6 +9,7 @@ export default function StreamPlayer({ isStreaming }) {
   const sourceBufferRef = useRef(null);
   const chunkQueueRef = useRef([]);
   const isInitializedRef = useRef(false);
+  const [muted, setMuted] = useState(true);
 
   function flushQueue() {
     const sb = sourceBufferRef.current;
@@ -49,6 +50,7 @@ export default function StreamPlayer({ isStreaming }) {
       const sb = ms.addSourceBuffer(MIME_TYPE);
       sourceBufferRef.current = sb;
       sb.addEventListener('updateend', flushQueue);
+      sb.addEventListener('error', (e) => console.error('SourceBuffer error:', e));
       // Flush anything queued before sourceopen fired
       flushQueue();
     });
@@ -106,8 +108,17 @@ export default function StreamPlayer({ isStreaming }) {
         style={styles.video}
         autoPlay
         playsInline
-        muted={false}
+        muted={muted}
       />
+      {isStreaming && (
+        <button
+          style={styles.muteBtn}
+          onClick={() => setMuted((m) => !m)}
+          title={muted ? 'Activar audio' : 'Silenciar'}
+        >
+          {muted ? '🔇 Activar audio' : '🔊 Silenciar'}
+        </button>
+      )}
       {!isStreaming && (
         <div style={styles.overlay}>
           <div style={styles.overlayContent}>
@@ -135,6 +146,19 @@ const styles = {
     width: '100%',
     height: '100%',
     objectFit: 'contain',
+  },
+  muteBtn: {
+    position: 'absolute',
+    bottom: '1rem',
+    right: '1rem',
+    background: 'rgba(0,0,0,0.7)',
+    color: '#fff',
+    border: '1px solid rgba(255,255,255,0.2)',
+    borderRadius: '6px',
+    padding: '0.4rem 0.8rem',
+    fontSize: '0.8rem',
+    cursor: 'pointer',
+    zIndex: 10,
   },
   overlay: {
     position: 'absolute',

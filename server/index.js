@@ -100,7 +100,10 @@ io.on('connection', (socket) => {
     if (state.isStreaming) {
       socket.emit('stream:start');
       if (state.initChunk) socket.emit('stream:chunk', state.initChunk);
-      state.recentChunks.forEach(chunk => socket.emit('stream:chunk', chunk));
+      // Skip initChunk from recentChunks to avoid duplicate init segment
+      state.recentChunks
+        .filter(chunk => chunk !== state.initChunk)
+        .forEach(chunk => socket.emit('stream:chunk', chunk));
     }
   }
 

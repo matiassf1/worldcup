@@ -48,9 +48,10 @@ export default function AdminControls() {
       socket.emit('stream:start');
       setIsStreaming(true);
 
-      mr.ondataavailable = (e) => {
+      mr.ondataavailable = async (e) => {
         if (e.data.size > 0 && socket.connected) {
-          socket.emit('stream:chunk', e.data);
+          const buffer = await e.data.arrayBuffer();
+          socket.emit('stream:chunk', buffer);
         }
       };
 
