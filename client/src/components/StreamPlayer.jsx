@@ -18,8 +18,8 @@ export default function StreamPlayer({ isStreaming }) {
     const next = chunkQueueRef.current.shift();
     try {
       sb.appendBuffer(next);
-    } catch {
-      // SourceBuffer may be in an invalid state if stream stopped
+    } catch (e) {
+      console.error('[MSE] appendBuffer error:', e.message);
     }
   }
 
@@ -30,11 +30,12 @@ export default function StreamPlayer({ isStreaming }) {
     } else if (chunk instanceof Uint8Array) {
       buffer = chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength);
     } else if (typeof chunk === 'object' && chunk !== null) {
-      // Socket.io may deliver as plain object with numeric keys
       buffer = new Uint8Array(Object.values(chunk)).buffer;
     } else {
+      console.warn('[MSE] unknown chunk type:', typeof chunk);
       return;
     }
+    console.log('[MSE] chunk received, bytes:', buffer.byteLength, 'queue:', chunkQueueRef.current.length);
     chunkQueueRef.current.push(buffer);
     flushQueue();
   }
@@ -46,25 +47,32 @@ export default function StreamPlayer({ isStreaming }) {
     const ms = new MediaSource();
     mediaSourceRef.current = ms;
     videoRef.current.src = URL.createObjectURL(ms);
+    console.log('[MSE] MediaSource created, readyState:', ms.readyState);
 
     ms.addEventListener('sourceopen', () => {
       const mime = mimeTypeRef.current;
+      console.log('[MSE] sourceopen, using mime:', mime);
+      console.log('[MSE] isTypeSupported:', MediaSource.isTypeSupported(mime));
       if (!MediaSource.isTypeSupported(mime)) {
-        console.error('MSE does not support codec:', mime);
+        console.error('[MSE] codec NOT supported:', mime);
         return;
       }
       const sb = ms.addSourceBuffer(mime);
       sourceBufferRef.current = sb;
+      console.log('[MSE] SourceBuffer created OK');
       sb.addEventListener('updateend', () => {
-        // Resume playback if it stalled waiting for data
         if (videoRef.current?.paused && videoRef.current?.readyState >= 2) {
-          videoRef.current.play().catch(() => {});
+          console.log('[MSE] video paused with data, calling play()');
+          videoRef.current.play().catch((e) => console.warn('[MSE] play() rejected:', e.message));
         }
         flushQueue();
       });
-      sb.addEventListener('error', (e) => console.error('SourceBuffer error:', e));
+      sb.addEventListener('error', (e) => console.error('[MSE] SourceBuffer error:', e));
       flushQueue();
     });
+
+    ms.addEventListener('sourceended', () => console.log('[MSE] sourceended'));
+    ms.addEventListener('sourceclose', () => console.log('[MSE] sourceclose'));
   }
 
   function cleanupMSE() {
@@ -87,10 +95,11 @@ export default function StreamPlayer({ isStreaming }) {
     if (!socket) return;
 
     function onStreamStart({ mimeType } = {}) {
+      console.log('[MSE] stream:start received, mimeType:', mimeType);
       mimeTypeRef.current = mimeType || DEFAULT_MIME;
       cleanupMSE();
       initMSE();
-      videoRef.current?.play().catch(() => {});
+      videoRef.current?.play().catch((e) => console.warn('[MSE] initial play() rejected:', e.message));
     }
 
     function onStreamChunk(chunk) {

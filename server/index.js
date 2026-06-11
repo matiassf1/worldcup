@@ -121,13 +121,20 @@ io.on('connection', (socket) => {
     state.mimeType = mimeType || 'video/webm; codecs=vp8';
     state.initChunk = null;
     state.recentChunks = [];
+    console.log('[stream:start] mimeType:', state.mimeType);
     io.to('viewers').emit('stream:start', { mimeType: state.mimeType });
   });
 
+  let chunkCount = 0;
   socket.on('stream:chunk', (chunk) => {
     if (role !== 'admin') return;
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    if (!state.initChunk) state.initChunk = buffer;
+    if (!state.initChunk) {
+      state.initChunk = buffer;
+      console.log('[stream:chunk] first chunk (init), size:', buffer.length);
+    }
+    chunkCount++;
+    if (chunkCount <= 5) console.log('[stream:chunk] #' + chunkCount + ' size:', buffer.length);
     state.recentChunks.push(buffer);
     if (state.recentChunks.length > 60) state.recentChunks.shift();
     io.to('viewers').emit('stream:chunk', buffer);
