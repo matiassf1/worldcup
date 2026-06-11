@@ -10,6 +10,10 @@ const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
 app.use(express.json());
 
+// Fail fast if required env vars are missing
+if (!process.env.ADMIN_PASSWORD) throw new Error('ADMIN_PASSWORD env var is required');
+if (!process.env.ROOM_USER || !process.env.ROOM_PASSWORD) throw new Error('ROOM_USER and ROOM_PASSWORD env vars are required');
+
 const state = {
   isStreaming: false,
   adminSocketId: null,
@@ -90,7 +94,7 @@ io.on('connection', (socket) => {
 
     // Update count
     state.viewerCount++;
-    io.emit('viewer:count', state.viewerCount);
+    io.to('room').emit('viewer:count', state.viewerCount);
 
     // Send current stream state if streaming
     if (state.isStreaming) {
@@ -133,7 +137,7 @@ io.on('connection', (socket) => {
 
   socket.on('chat:message', ({ text }) => {
     if (typeof text !== 'string' || text.trim().length === 0 || text.length > 300) return;
-    const nickname = state.viewerNicknames.get(socket.id) || 'Anónimo';
+    const nickname = role === 'admin' ? 'Admin' : (state.viewerNicknames.get(socket.id) || 'Anónimo');
     io.to('room').emit('chat:message', { nickname, text: text.trim(), ts: Date.now() });
   });
 
@@ -141,7 +145,7 @@ io.on('connection', (socket) => {
     if (role === 'viewer') {
       state.viewerNicknames.delete(socket.id);
       state.viewerCount = Math.max(0, state.viewerCount - 1);
-      io.emit('viewer:count', state.viewerCount);
+      io.to('room').emit('viewer:count', state.viewerCount);
     }
     if (role === 'admin' && socket.id === state.adminSocketId) {
       state.adminSocketId = null;
