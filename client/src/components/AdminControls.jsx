@@ -29,7 +29,7 @@ export default function AdminControls() {
     setError('');
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { frameRate: 30 },
+        video: { frameRate: 30, width: { ideal: 1920 }, height: { ideal: 1080 } },
         audio: true,
       });
       streamRef.current = stream;
@@ -46,7 +46,10 @@ export default function AdminControls() {
         return;
       }
 
-      const mr = new MediaRecorder(stream, { mimeType });
+      const mr = new MediaRecorder(stream, {
+        mimeType,
+        videoBitsPerSecond: 6_000_000, // 6 Mbps — good quality for sports content
+      });
       mediaRecorderRef.current = mr;
 
       const socket = getSocket();
