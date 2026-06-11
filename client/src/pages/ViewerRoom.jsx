@@ -19,10 +19,13 @@ export default function ViewerRoom() {
 
     const socket = connectSocket(token, 'viewer');
 
-    socket.on('connect_error', () => {
+    socket.on('connect', () => console.log('[socket] viewer connected, id:', socket.id));
+    socket.on('connect_error', (err) => {
+      console.warn('[socket] connect_error:', err.message);
       localStorage.removeItem('viewerToken');
       navigate('/');
     });
+    socket.on('disconnect', (reason) => console.warn('[socket] disconnected:', reason));
 
     socket.on('stream:start', () => setIsStreaming(true));
     socket.on('stream:stop', () => setIsStreaming(false));
