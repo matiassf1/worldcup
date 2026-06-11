@@ -98,7 +98,7 @@ io.on('connection', (socket) => {
 
     // Send current stream state if streaming
     if (state.isStreaming) {
-      socket.emit('stream:start');
+      socket.emit('stream:start', { mimeType: state.mimeType });
       if (state.initChunk) socket.emit('stream:chunk', state.initChunk);
       // Skip initChunk from recentChunks to avoid duplicate init segment
       state.recentChunks
@@ -115,12 +115,13 @@ io.on('connection', (socket) => {
 
   // --- Events ---
 
-  socket.on('stream:start', () => {
+  socket.on('stream:start', ({ mimeType } = {}) => {
     if (role !== 'admin') return;
     state.isStreaming = true;
+    state.mimeType = mimeType || 'video/webm; codecs=vp8';
     state.initChunk = null;
     state.recentChunks = [];
-    io.to('viewers').emit('stream:start');
+    io.to('viewers').emit('stream:start', { mimeType: state.mimeType });
   });
 
   socket.on('stream:chunk', (chunk) => {

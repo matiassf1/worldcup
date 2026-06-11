@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { getSocket } from '../socket.js';
 
-const MIME_TYPE = 'video/webm; codecs=vp8';
+const DEFAULT_MIME = 'video/webm; codecs="vp8,opus"';
 
 export default function StreamPlayer({ isStreaming }) {
   const videoRef = useRef(null);
@@ -9,6 +9,7 @@ export default function StreamPlayer({ isStreaming }) {
   const sourceBufferRef = useRef(null);
   const chunkQueueRef = useRef([]);
   const isInitializedRef = useRef(false);
+  const mimeTypeRef = useRef(DEFAULT_MIME);
   const [muted, setMuted] = useState(true);
 
   function flushQueue() {
@@ -47,11 +48,21 @@ export default function StreamPlayer({ isStreaming }) {
     videoRef.current.src = URL.createObjectURL(ms);
 
     ms.addEventListener('sourceopen', () => {
-      const sb = ms.addSourceBuffer(MIME_TYPE);
+      const mime = mimeTypeRef.current;
+      if (!MediaSource.isTypeSupported(mime)) {
+        console.error('MSE does not support codec:', mime);
+        return;
+      }
+      const sb = ms.addSourceBuffer(mime);
       sourceBufferRef.current = sb;
-      sb.addEventListener('updateend', flushQueue);
+      sb.addEventListener('updateend', () => {
+        // Resume playback if it stalled waiting for data
+        if (videoRef.current?.paused && videoRef.current?.readyState >= 2) {
+          videoRef.current.play().catch(() => {});
+        }
+        flushQueue();
+      });
       sb.addEventListener('error', (e) => console.error('SourceBuffer error:', e));
-      // Flush anything queued before sourceopen fired
       flushQueue();
     });
   }
@@ -75,7 +86,8 @@ export default function StreamPlayer({ isStreaming }) {
     const socket = getSocket();
     if (!socket) return;
 
-    function onStreamStart() {
+    function onStreamStart({ mimeType } = {}) {
+      mimeTypeRef.current = mimeType || DEFAULT_MIME;
       cleanupMSE();
       initMSE();
       videoRef.current?.play().catch(() => {});

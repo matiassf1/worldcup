@@ -45,7 +45,8 @@ export default function AdminControls() {
       mediaRecorderRef.current = mr;
 
       const socket = getSocket();
-      socket.emit('stream:start');
+      // Send the actual mimeType MediaRecorder chose (may include opus for audio)
+      socket.emit('stream:start', { mimeType: mr.mimeType });
       setIsStreaming(true);
 
       mr.ondataavailable = async (e) => {
