@@ -10,14 +10,19 @@ export default function ViewerRoom() {
   const [messages, setMessages] = useState([]);
   const [viewerCount, setViewerCount] = useState(0);
 
-  useEffect(() => {
+  // Initialize socket synchronously during render so StreamPlayer's useEffect
+  // (which runs before parent effects) can access it via getSocket()
+  const [socket] = useState(() => {
     const token = localStorage.getItem('viewerToken');
-    if (!token) {
+    if (!token) return null;
+    return connectSocket(token, 'viewer');
+  });
+
+  useEffect(() => {
+    if (!socket) {
       navigate('/');
       return;
     }
-
-    const socket = connectSocket(token, 'viewer');
 
     socket.on('connect', () => console.log('[socket] viewer connected, id:', socket.id));
     socket.on('connect_error', (err) => {
@@ -37,7 +42,7 @@ export default function ViewerRoom() {
     socket.on('viewer:count', (count) => setViewerCount(count));
 
     return () => disconnectSocket();
-  }, [navigate]);
+  }, [socket, navigate]);
 
   return (
     <div style={styles.layout}>
