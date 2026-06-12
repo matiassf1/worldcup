@@ -29,14 +29,17 @@ export default function AdminControls() {
     setError('');
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { frameRate: 30, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        video: { frameRate: 30 },
         audio: true,
       });
       streamRef.current = stream;
 
-      // vp8+opus matches what Chrome actually produces when audio is present.
-      // Using vp8-only causes MEDIA_ERR_DECODE on the viewer's SourceBuffer.
-      let mimeType = 'video/webm; codecs="vp8,opus"';
+      // Use opus only when audio tracks are present — mixing vp8-only with opus
+      // causes SourceBuffer to reject chunks with MEDIA_ERR_DECODE.
+      const hasAudio = stream.getAudioTracks().length > 0;
+      let mimeType = hasAudio
+        ? 'video/webm; codecs="vp8,opus"'
+        : 'video/webm; codecs=vp8';
       if (!MediaRecorder.isTypeSupported(mimeType)) {
         mimeType = 'video/webm; codecs=vp8';
       }
@@ -46,14 +49,10 @@ export default function AdminControls() {
         return;
       }
 
-      const mr = new MediaRecorder(stream, {
-        mimeType,
-        videoBitsPerSecond: 6_000_000, // 6 Mbps — good quality for sports content
-      });
+      const mr = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = mr;
 
       const socket = getSocket();
-      // Send the actual mimeType MediaRecorder chose (may include opus for audio)
       socket.emit('stream:start', { mimeType: mr.mimeType });
       setIsStreaming(true);
 
@@ -63,18 +62,19 @@ export default function AdminControls() {
         console.log('[recorder] chunk size:', e.data.size, 'connected:', socket.connected, 'state:', mr.state);
         if (e.data.size > 0 && socket.connected) {
           const buffer = await e.data.arrayBuffer();
-          console.log('[recorder] emitting chunk, bytes:', buffer.byteLength);
           socket.emit('stream:chunk', buffer);
         }
       };
 
       mr.onstop = () => console.log('[recorder] stopped');
 
-      // If user closes the OS screen picker or stops sharing via browser UI
-      stream.getVideoTracks()[0].addEventListener('ended', stopStream);
+      stream.getVideoTracks()[0]?.addEventListener('ended', stopStream);
 
+      console.log('[recorder] starting, mimeType:', mr.mimeType, 'audioTracks:', stream.getAudioTracks().length);
       mr.start(100);
+      console.log('[recorder] started, state:', mr.state);
     } catch (err) {
+      console.error('[recorder] startStream error:', err.name, err.message);
       if (err.name !== 'NotAllowedError') {
         setError('No se pudo iniciar la captura de pantalla.');
       }
