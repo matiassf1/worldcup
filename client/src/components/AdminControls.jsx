@@ -57,16 +57,18 @@ export default function AdminControls() {
       socket.emit('stream:start', { mimeType: mr.mimeType });
       setIsStreaming(true);
 
+      mr.onerror = (e) => console.error('[recorder] error:', e.error?.name, e.error?.message);
+
       mr.ondataavailable = async (e) => {
+        console.log('[recorder] chunk size:', e.data.size, 'connected:', socket.connected, 'state:', mr.state);
         if (e.data.size > 0 && socket.connected) {
           const buffer = await e.data.arrayBuffer();
+          console.log('[recorder] emitting chunk, bytes:', buffer.byteLength);
           socket.emit('stream:chunk', buffer);
         }
       };
 
-      mr.onstop = () => {
-        // Only stop if we didn't already stop manually
-      };
+      mr.onstop = () => console.log('[recorder] stopped');
 
       // If user closes the OS screen picker or stops sharing via browser UI
       stream.getVideoTracks()[0].addEventListener('ended', stopStream);
